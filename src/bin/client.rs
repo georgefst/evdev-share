@@ -89,7 +89,7 @@ fn main() {
         });
     }
     loop {
-        //TODO use a proper async/threading library instead
+        //TODO use a proper async/threading library instead - rayon?
         thread::sleep(Duration::from_secs(u64::MAX));
     }
 }
