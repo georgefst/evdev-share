@@ -4,6 +4,8 @@ use std::{
     fs::File,
     net::{IpAddr, SocketAddr, UdpSocket},
     str::FromStr,
+    sync::Arc,
+    sync::Mutex,
     thread,
     time::Duration,
 };
@@ -11,6 +13,9 @@ use std::{
 /*TODO
 grab at start if not idle, ungrab on kill
 if device disconnects (e.g. bluetooth keyboard, inotifywait for it to come back)
+remove 'unwrap's
+    important
+        'active' mutex
 */
 
 //TODO add help info
@@ -31,9 +36,10 @@ struct Args {
 fn main() {
     let args: Args = Args::parse();
     let addr = SocketAddr::new(args.ip, args.port);
-    let mut active = !args.idle;
+    let active = Arc::new(Mutex::new(!args.idle));
 
     for dev_path in args.devices.into_iter() {
+        let active = Arc::clone(&active);
         thread::spawn(move || {
             let sock = &UdpSocket::bind(SocketAddr::from(([0, 0, 0, 0], 0))).unwrap();
             let mut dev = Device::new_from_fd(File::open(dev_path).unwrap()).unwrap();
@@ -44,8 +50,9 @@ fn main() {
                     Ok((_, event)) => match event.event_code {
                         EventCode::EV_KEY(EV_KEY::KEY_RIGHTALT) => match event.value {
                             0 => {
-                                active = !active;
-                                if active {
+                                let mut active = active.lock().unwrap();
+                                *active = !*active;
+                                if *active {
                                     dev.grab(GrabMode::Grab).unwrap_or_else(|e| {
                                         println!("Failed to grab device: {}", e)
                                     });
@@ -60,7 +67,7 @@ fn main() {
                             _ => (),
                         },
                         EventCode::EV_KEY(k) => {
-                            if active {
+                            if *active.lock().unwrap() {
                                 println!("Sending: {:?}, {}", k, event.value);
                                 buf[0] = k as u8;
                                 buf[1] = event.value as u8;
@@ -71,7 +78,7 @@ fn main() {
                             }
                         }
                         e => {
-                            if active {
+                            if *active.lock().unwrap() {
                                 println!("Non-key event, ignoring: {}", e)
                             }
                         }
