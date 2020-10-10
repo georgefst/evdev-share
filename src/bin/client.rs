@@ -4,6 +4,8 @@ use std::{
     fs::File,
     net::{IpAddr, SocketAddr, UdpSocket},
     str::FromStr,
+    sync::atomic::AtomicBool,
+    sync::atomic::Ordering,
     thread,
     time::Duration,
 };
@@ -31,9 +33,11 @@ struct Args {
 fn main() {
     let args: Args = Args::parse();
     let addr = SocketAddr::new(args.ip, args.port);
-    let mut active = !args.idle;
+    let activ = AtomicBool::new(!args.idle);
+    let active = &activ;
 
     for dev_path in args.devices.into_iter() {
+        // thread::spawn(|| {
         thread::spawn(move || {
             let sock = &UdpSocket::bind(SocketAddr::from(([0, 0, 0, 0], 0))).unwrap();
             let mut dev = Device::new_from_fd(File::open(dev_path).unwrap()).unwrap();
@@ -44,8 +48,11 @@ fn main() {
                     Ok((_, event)) => match event.event_code {
                         EventCode::EV_KEY(EV_KEY::KEY_RIGHTALT) => match event.value {
                             0 => {
-                                active = !active;
-                                if active {
+                                let a1 = &active.load(Ordering::Relaxed);
+                                let a1 = true;
+                                let a = !a1;
+                                // active.store(a, Ordering::Relaxed);
+                                if a {
                                     dev.grab(GrabMode::Grab).unwrap_or_else(|e| {
                                         println!("Failed to grab device: {}", e)
                                     });
@@ -60,18 +67,20 @@ fn main() {
                             _ => (),
                         },
                         EventCode::EV_KEY(k) => {
-                            if active {
+                            // if active.load(std::sync::atomic::Ordering::Relaxed) {
+                            if true {
                                 println!("Sending: {:?}, {}", k, event.value);
                                 buf[0] = k as u8;
                                 buf[1] = event.value as u8;
-                                sock.send_to(&mut buf, addr).unwrap_or_else(|e| {
+                                sock.send_to(&mut buf, &addr).unwrap_or_else(|e| {
                                     println!("Failed to send: {}", e);
                                     0
                                 });
                             }
                         }
                         e => {
-                            if active {
+                            // if active.load(Ordering::Relaxed) {
+                            if true {
                                 println!("Non-key event, ignoring: {}", e)
                             }
                         }
