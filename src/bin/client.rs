@@ -6,6 +6,11 @@ use std::{
     str::FromStr,
 };
 
+/*TODO
+grab at start if not idle, ungrab on kill
+if device disconnects (e.g. bluetooth keyboard, inotifywait for it to come back)
+*/
+
 //TODO add help info
 #[derive(Clap, Debug)]
 struct Args {
