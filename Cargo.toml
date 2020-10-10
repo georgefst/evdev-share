@@ -1,0 +1,9 @@
+[package]
+name = "evdev-share"
+version = "0.1.0"
+authors = ["George Thomas <georgefsthomas@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+clap = {git = "https://github.com/clap-rs/clap"}
+evdev-rs = "0.4.0"
