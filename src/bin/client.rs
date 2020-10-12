@@ -11,7 +11,10 @@ use std::{
 };
 
 /*TODO
-grab at start if not idle, ungrab on kill
+grabbing
+    grab at start if not idle, ungrab on kill
+    grab all devices (particularly seeing as we want to use this with a keyboard that has 3 physical devices)
+        this is difficult, because 'grab' is tied to the thread, and rust's async is confusing...
 if device disconnects (e.g. bluetooth keyboard, inotifywait for it to come back)
 remove 'unwrap's
     important
