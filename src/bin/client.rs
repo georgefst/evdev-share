@@ -20,7 +20,7 @@ struct Args {
     #[clap(short = 'd')]
     device: String,
     #[clap(short = 'k')]
-    key_wrapped: KeyWrapped,
+    switch_key: KeyWrapped,
     #[clap(long = "start-idle")]
     idle: bool,
 }
@@ -28,7 +28,7 @@ struct Args {
 fn main() {
     let args: Args = Args::parse();
     let addr = SocketAddr::new(args.ip, args.port);
-    let switch_key = args.key_wrapped.key;
+    let switch_key = args.switch_key.key;
     let sock = &UdpSocket::bind(SocketAddr::from(([0, 0, 0, 0], 0))).unwrap();
     let mut dev = Device::new_from_fd(File::open(args.device).unwrap()).unwrap();
     let mut buf = [0; 2];
