@@ -49,6 +49,7 @@ fn main() {
             let sock = &UdpSocket::bind(SocketAddr::from(([0, 0, 0, 0], 0))).unwrap();
             let mut dev = Device::new_from_fd(File::open(dev_path).unwrap()).unwrap();
             let mut buf = [0; 2];
+            let mut interrupted = false; // have there been any events from other keys since switch was last pressed?
 
             loop {
                 match dev.next_event(ReadFlag::NORMAL | ReadFlag::BLOCKING) {
@@ -56,35 +57,37 @@ fn main() {
                         EventCode::EV_KEY(k) => {
                             if k == switch_key {
                                 match event.value {
+                                    1 => interrupted = false,
                                     0 => {
-                                        let mut active = active.lock().unwrap();
-                                        *active = !*active;
-                                        if *active {
-                                            dev.grab(GrabMode::Grab).unwrap_or_else(|e| {
-                                                println!("Failed to grab device: {}", e)
-                                            });
-                                            println!("Switched to active");
-                                        } else {
-                                            dev.grab(GrabMode::Ungrab).unwrap_or_else(|e| {
-                                                println!("Failed to ungrab device: {}", e)
-                                            });
-                                            println!("Switched to idle");
+                                        if !interrupted {
+                                            let mut active = active.lock().unwrap();
+                                            *active = !*active;
+                                            if *active {
+                                                dev.grab(GrabMode::Grab).unwrap_or_else(|e| {
+                                                    println!("Failed to grab device: {}", e)
+                                                });
+                                                println!("Switched to active");
+                                            } else {
+                                                dev.grab(GrabMode::Ungrab).unwrap_or_else(|e| {
+                                                    println!("Failed to ungrab device: {}", e)
+                                                });
+                                                println!("Switched to idle");
+                                            }
                                         }
                                     }
                                     _ => (),
                                 }
                             } else {
-                                {
-                                    if *active.lock().unwrap() {
-                                        println!("Sending: {:?}, {}", k, event.value);
-                                        buf[0] = k as u8;
-                                        buf[1] = event.value as u8;
-                                        sock.send_to(&mut buf, addr).unwrap_or_else(|e| {
-                                            println!("Failed to send: {}", e);
-                                            0
-                                        });
-                                    }
-                                }
+                                interrupted = true;
+                            }
+                            if *active.lock().unwrap() {
+                                println!("Sending: {:?}, {}", k, event.value);
+                                buf[0] = k as u8;
+                                buf[1] = event.value as u8;
+                                sock.send_to(&mut buf, addr).unwrap_or_else(|e| {
+                                    println!("Failed to send: {}", e);
+                                    0
+                                });
                             }
                         }
                         e => {
