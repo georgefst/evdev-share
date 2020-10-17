@@ -54,13 +54,22 @@ fn main() {
             loop {
                 match dev.next_event(ReadFlag::NORMAL | ReadFlag::BLOCKING) {
                     Ok((_, event)) => match event.event_code {
-                        EventCode::EV_KEY(k) => {
-                            if k == switch_key {
+                        EventCode::EV_KEY(key) => {
+                            let mut active = active.lock().unwrap();
+                            if *active {
+                                println!("Sending: {:?}, {}", key, event.value);
+                                buf[0] = key.clone() as u8;
+                                buf[1] = event.value as u8;
+                                sock.send_to(&mut buf, addr).unwrap_or_else(|e| {
+                                    println!("Failed to send: {}", e);
+                                    0
+                                });
+                            }
+                            if key == switch_key {
                                 match event.value {
                                     1 => interrupted = false,
                                     0 => {
                                         if !interrupted {
-                                            let mut active = active.lock().unwrap();
                                             *active = !*active;
                                             if *active {
                                                 dev.grab(GrabMode::Grab).unwrap_or_else(|e| {
@@ -79,15 +88,6 @@ fn main() {
                                 }
                             } else {
                                 interrupted = true;
-                            }
-                            if *active.lock().unwrap() {
-                                println!("Sending: {:?}, {}", k, event.value);
-                                buf[0] = k as u8;
-                                buf[1] = event.value as u8;
-                                sock.send_to(&mut buf, addr).unwrap_or_else(|e| {
-                                    println!("Failed to send: {}", e);
-                                    0
-                                });
                             }
                         }
                         e => {
