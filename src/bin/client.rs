@@ -4,21 +4,10 @@ use std::{
     fs::File,
     net::{IpAddr, SocketAddr, UdpSocket},
     str::FromStr,
-    sync::Arc,
-    sync::Mutex,
-    thread,
-    time::Duration,
 };
 
 /*TODO
-grabbing
-    grab at start if not idle, ungrab on kill
-    grab all devices (particularly seeing as we want to use this with a keyboard that has 3 physical devices)
-        this is difficult, because 'grab' is tied to the thread, and rust's async is confusing...
-if device disconnects (e.g. bluetooth keyboard, inotifywait for it to come back)
-remove 'unwrap's
-    important
-        'active' mutex
+grab at start if not idle, ungrab on kill
 */
 
 //TODO add help info
@@ -29,7 +18,7 @@ struct Args {
     #[clap(short = 'a')]
     ip: IpAddr,
     #[clap(short = 'd')]
-    devices: Vec<String>,
+    device: String,
     #[clap(short = 'k')]
     key_wrapped: KeyWrapped,
     #[clap(long = "start-idle")]
@@ -39,78 +28,66 @@ struct Args {
 fn main() {
     let args: Args = Args::parse();
     let addr = SocketAddr::new(args.ip, args.port);
-    let active = Arc::new(Mutex::new(!args.idle));
     let switch_key = args.key_wrapped.key;
+    let sock = &UdpSocket::bind(SocketAddr::from(([0, 0, 0, 0], 0))).unwrap();
+    let mut dev = Device::new_from_fd(File::open(args.device).unwrap()).unwrap();
+    let mut buf = [0; 2];
+    let mut active = !args.idle; // currently grabbed and sending events
+    let mut interrupted = false; // have there been any events from other keys since switch was last pressed?
 
-    for dev_path in args.devices.into_iter() {
-        let active = Arc::clone(&active);
-        let switch_key = switch_key.clone();
-        thread::spawn(move || {
-            let sock = &UdpSocket::bind(SocketAddr::from(([0, 0, 0, 0], 0))).unwrap();
-            let mut dev = Device::new_from_fd(File::open(dev_path).unwrap()).unwrap();
-            let mut buf = [0; 2];
-            let mut interrupted = false; // have there been any events from other keys since switch was last pressed?
-
-            loop {
-                match dev.next_event(ReadFlag::NORMAL | ReadFlag::BLOCKING) {
-                    Ok((_, event)) => match event.event_code {
-                        EventCode::EV_KEY(key) => {
-                            let mut active = active.lock().unwrap();
-                            if *active {
-                                println!("Sending: {:?}, {}", key, event.value);
-                                buf[0] = key.clone() as u8;
-                                buf[1] = event.value as u8;
-                                sock.send_to(&mut buf, addr).unwrap_or_else(|e| {
-                                    println!("Failed to send: {}", e);
-                                    0
-                                });
-                            }
-                            if key == switch_key {
-                                match event.value {
-                                    1 => interrupted = false,
-                                    0 => {
-                                        if !interrupted {
-                                            *active = !*active;
-                                            if *active {
-                                                dev.grab(GrabMode::Grab).unwrap_or_else(|e| {
-                                                    println!("Failed to grab device: {}", e)
-                                                });
-                                                println!("Switched to active");
-                                            } else {
-                                                dev.grab(GrabMode::Ungrab).unwrap_or_else(|e| {
-                                                    println!("Failed to ungrab device: {}", e)
-                                                });
-                                                println!("Switched to idle");
-                                            }
-                                        }
+    loop {
+        match dev.next_event(ReadFlag::NORMAL | ReadFlag::BLOCKING) {
+            Ok((_, event)) => match event.event_code {
+                EventCode::EV_KEY(key) => {
+                    if active {
+                        println!("Sending: {:?}, {}", key, event.value);
+                        buf[0] = key.clone() as u8;
+                        buf[1] = event.value as u8;
+                        sock.send_to(&mut buf, addr).unwrap_or_else(|e| {
+                            println!("Failed to send: {}", e);
+                            0
+                        });
+                    }
+                    if key == switch_key {
+                        match event.value {
+                            1 => interrupted = false,
+                            0 => {
+                                if !interrupted {
+                                    active = !active;
+                                    if active {
+                                        dev.grab(GrabMode::Grab).unwrap_or_else(|e| {
+                                            println!("Failed to grab device: {}", e)
+                                        });
+                                        println!("Switched to active");
+                                    } else {
+                                        dev.grab(GrabMode::Ungrab).unwrap_or_else(|e| {
+                                            println!("Failed to ungrab device: {}", e)
+                                        });
+                                        println!("Switched to idle");
                                     }
-                                    _ => (),
                                 }
-                            } else {
-                                interrupted = true;
                             }
+                            _ => (),
                         }
-                        e => {
-                            if *active.lock().unwrap() {
-                                println!("Non-key event, ignoring: {}", e)
-                            }
-                        }
-                    },
-                    Err(e) => {
-                        println!(
-                            "Failed to get next event, abandoning device: {} ({:?})",
-                            dev.phys().unwrap_or("NO_PHYS"),
-                            e
-                        );
-                        break;
+                    } else {
+                        interrupted = true;
                     }
                 }
+                e => {
+                    if active {
+                        println!("Non-key event, ignoring: {}", e)
+                    }
+                }
+            },
+            Err(e) => {
+                println!(
+                    "Failed to get next event, abandoning device: {} ({:?})",
+                    dev.phys().unwrap_or("NO_PHYS"),
+                    e
+                );
+                break;
             }
-        });
-    }
-    loop {
-        //TODO use a proper async/threading library instead - rayon?
-        thread::sleep(Duration::from_secs(u64::MAX));
+        }
     }
 }
 
