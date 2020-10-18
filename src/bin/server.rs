@@ -1,6 +1,6 @@
 use clap::Clap;
 use evdev_rs::{
-    enums::{int_to_ev_key, EventCode, EventType, EV_SYN},
+    enums::{int_to_ev_key, EventCode, EventType, EV_KEY, EV_SYN},
     Device, InputEvent, TimeVal, UInputDevice,
 };
 use std::net::{SocketAddr, UdpSocket};
@@ -13,10 +13,6 @@ struct Args {
     name: String,
 }
 
-//TODO is this even correct? poor API - see https://github.com/ndesh26/evdev-rs/issues/50
-//TODO enable key events only
-const MIN_CODE: EventCode = EventCode::EV_SYN(EV_SYN::SYN_REPORT);
-
 fn main() {
     let args = Args::parse();
     let sock = &UdpSocket::bind(SocketAddr::from(([0, 0, 0, 0], args.port))).unwrap();
@@ -25,11 +21,14 @@ fn main() {
     let fake_dev = Device::new().unwrap();
     fake_dev.set_name(&args.name);
     fake_dev.enable(&EventType::EV_KEY).unwrap();
-    for code in EventCode::iter(&MIN_CODE) {
-        if let EventCode::EV_KEY(ref _k) = code {
+    // KEY_RESERVED is the "minimum" key event, and the key events are all consecutive
+    for code in EventCode::EV_KEY(EV_KEY::KEY_RESERVED).iter() {
+        if let EventCode::EV_KEY(_) = code {
             fake_dev
                 .enable(&code)
                 .unwrap_or_else(|e| println!("Failed to enable code ({}): {}", e, code));
+        } else {
+            break;
         }
     }
     let dev = UInputDevice::create_from_device(&fake_dev).unwrap();
