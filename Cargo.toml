@@ -4,6 +4,14 @@ version = "0.1.0"
 authors = ["George Thomas <georgefsthomas@gmail.com>"]
 edition = "2018"
 
+[[bin]]
+path = "src/bin/client.rs"
+name = "evdev-share-client"
+
+[[bin]]
+path = "src/bin/server.rs"
+name = "evdev-share-server"
+
 [dependencies]
 clap = {git = "https://github.com/clap-rs/clap"}
 evdev-rs = "0.4.0"
