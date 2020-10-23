@@ -34,25 +34,35 @@ fn main() {
     let mut buf = [0; 2];
     let mut active = !args.idle; // currently grabbed and sending events
     let mut interrupted = false; // have there been any events from other keys since switch was last pressed?
+    let mut hanging_switch = false; // we don't necessarily want to send a switch down event, since we might actually
+                                    // be switching mode - so we carry over to the next round
+
+    let mut send_key = |key: EV_KEY, event_value: i32| {
+        println!("Sending: {:?}, {}", key, event_value);
+        buf[0] = key as u8;
+        buf[1] = event_value as u8;
+        sock.send_to(&mut buf, addr).unwrap_or_else(|e| {
+            println!("Failed to send: {}", e);
+            0
+        });
+    };
 
     loop {
         match dev.next_event(ReadFlag::NORMAL | ReadFlag::BLOCKING) {
             Ok((_, event)) => match event.event_code {
                 EventCode::EV_KEY(key) => {
-                    if active {
-                        println!("Sending: {:?}, {}", key, event.value);
-                        buf[0] = key.clone() as u8;
-                        buf[1] = event.value as u8;
-                        sock.send_to(&mut buf, addr).unwrap_or_else(|e| {
-                            println!("Failed to send: {}", e);
-                            0
-                        });
-                    }
                     if key == switch_key {
                         match event.value {
-                            1 => interrupted = false,
+                            1 => {
+                                if active {
+                                    interrupted = false;
+                                    hanging_switch = true;
+                                }
+                            }
                             0 => {
-                                if !interrupted {
+                                if interrupted && active {
+                                    send_key(key, event.value);
+                                } else {
                                     active = !active;
                                     if active {
                                         dev.grab(GrabMode::Grab).unwrap_or_else(|e| {
@@ -64,13 +74,21 @@ fn main() {
                                             println!("Failed to ungrab device: {}", e)
                                         });
                                         println!("Switched to idle");
+                                        hanging_switch = false;
                                     }
                                 }
                             }
                             _ => (),
                         }
                     } else {
-                        interrupted = true;
+                        if active {
+                            if hanging_switch {
+                                send_key(switch_key.clone(), 1);
+                            }
+                            send_key(key, event.value);
+                            interrupted = true;
+                            hanging_switch = false;
+                        }
                     }
                 }
                 e => {
