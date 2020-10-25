@@ -38,6 +38,8 @@ fn main() {
             Ok((_n_bytes, addr)) => {
                 let key_code = buf[0] as u32;
                 if let Some(k) = int_to_ev_key(key_code) {
+                    /*TODO in the C API, we would set this to null to use the current time -
+                    does 'evdev-rs' have an equivalent? */
                     let t = TimeVal::new(0, 0);
                     let c = EventCode::EV_KEY(k);
                     let v = buf[1] as i32;
