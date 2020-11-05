@@ -14,4 +14,5 @@ name = "evdev-share-server"
 
 [dependencies]
 clap = "3.0.0-beta.2"
-evdev-rs = "0.4.0"
+#TODO waiting on 0.4.1 - FromStr for enums
+evdev-rs = { git = "https://github.com/ndesh26/evdev-rs", rev = "8e995b8" }
