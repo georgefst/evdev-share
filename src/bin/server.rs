@@ -37,7 +37,10 @@ fn main() {
         match sock.recv_from(&mut buf) {
             Ok((n_bytes, addr)) => {
                 if n_bytes != 2 {
-                    panic!("Received {} bytes (expected 2) from {}: {:?}", n_bytes, addr, buf);
+                    panic!(
+                        "Received {} bytes (expected 2) from {}: {:?}",
+                        n_bytes, addr, buf
+                    );
                 }
                 let key_code = buf[0] as u32;
                 if let Some(k) = int_to_ev_key(key_code) {
