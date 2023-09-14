@@ -1,15 +1,15 @@
-use clap::Clap;
+use clap::Parser;
 use evdev_rs::{
     enums::{int_to_ev_key, EventCode, EventType, EV_KEY, EV_SYN},
-    Device, InputEvent, TimeVal, UInputDevice,
+    DeviceWrapper, InputEvent, TimeVal, UInputDevice, UninitDevice,
 };
 use std::net::{SocketAddr, UdpSocket};
 
-#[derive(Clap, Debug)]
+#[derive(Parser, Debug)]
 struct Args {
-    #[clap(short = 'p')]
+    #[arg(short = 'p')]
     port: u16,
-    #[clap(short = 'n')]
+    #[arg(short = 'n')]
     name: String,
 }
 
@@ -18,14 +18,14 @@ fn main() {
     let sock = &UdpSocket::bind(SocketAddr::from(([0, 0, 0, 0], args.port))).unwrap();
     let mut buf = [0; 2];
 
-    let fake_dev = Device::new().unwrap();
+    let fake_dev = UninitDevice::new().unwrap();
     fake_dev.set_name(&args.name);
-    fake_dev.enable(&EventType::EV_KEY).unwrap();
+    fake_dev.enable(EventType::EV_KEY).unwrap();
     // KEY_RESERVED is the "minimum" key event, and the key events are all consecutive
     for code in EventCode::EV_KEY(EV_KEY::KEY_RESERVED).iter() {
         if let EventCode::EV_KEY(_) = code {
             fake_dev
-                .enable(&code)
+                .enable(code)
                 .unwrap_or_else(|e| println!("Failed to enable code ({}): {}", e, code));
         } else {
             break;

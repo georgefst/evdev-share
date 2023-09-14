@@ -1,7 +1,6 @@
-use clap::Clap;
-use evdev_rs::{enums::EventCode, enums::EV_KEY, Device, GrabMode, ReadFlag};
+use clap::Parser;
+use evdev_rs::{enums::EventCode, enums::EV_KEY, Device, DeviceWrapper, GrabMode, ReadFlag};
 use std::{
-    fs::File,
     net::{IpAddr, SocketAddr, UdpSocket},
     str::FromStr,
 };
@@ -11,17 +10,17 @@ grab at start if not idle, ungrab on kill
 */
 
 //TODO add help info
-#[derive(Clap, Debug)]
+#[derive(Parser, Debug)]
 struct Args {
-    #[clap(short = 'p')]
+    #[arg(short = 'p')]
     port: u16,
-    #[clap(short = 'a')]
+    #[arg(short = 'a')]
     ip: IpAddr,
-    #[clap(short = 'd')]
+    #[arg(short = 'd')]
     device: String,
-    #[clap(short = 'k')]
+    #[arg(short = 'k')]
     switch_key: KeyWrapped,
-    #[clap(long = "start-idle")]
+    #[arg(long = "start-idle")]
     idle: bool,
 }
 
@@ -30,7 +29,7 @@ fn main() {
     let addr = SocketAddr::new(args.ip, args.port);
     let switch_key = args.switch_key.key;
     let sock = &UdpSocket::bind(SocketAddr::from(([0, 0, 0, 0], 0))).unwrap();
-    let mut dev = Device::new_from_fd(File::open(args.device).unwrap()).unwrap();
+    let mut dev = Device::new_from_path(args.device).unwrap();
     let mut buf = [0; 2];
     let mut active = !args.idle; // currently grabbed and sending events
     let mut interrupted = false; // have there been any events from other keys since switch was last pressed?
@@ -110,7 +109,7 @@ fn main() {
 }
 
 //TODO implement upstream using 'libevdev_event_code_from_name' (along with Copy)
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct KeyWrapped {
     key: EV_KEY,
 }
