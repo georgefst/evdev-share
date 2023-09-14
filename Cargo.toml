@@ -13,5 +13,5 @@ path = "src/bin/server.rs"
 name = "evdev-share-server"
 
 [dependencies]
-clap = { version = "4.4.3", features = ["derive"] }
+clap = { version = "4.1.*", features = ["derive"] }
 evdev-rs = "0.6.1"
